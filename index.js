@@ -1,191 +1,234 @@
-(function () {
- 
-    // 标题
-    const titleArr = ["CSDN博客", "简书", "51CTO", "博客园", "软件园", "下载之家", "下载网",
-        "百度健康", "快速问医生", "求医网", "求医问药", "家庭医生", "亿速云", "动力节点在线", "IT 技术博客",
-        "千锋教育", "虎课网", "黑马程序员", "FinClip", "tie.pub", "php中文网", "mybj123.com", "脚本之家",
-        "今日头条", "慕课网实战课程", "群英网络", "百度知道"];
- 
-    // 标题匹配正则
-    const titleRegex = ["- csdn$"];
- 
-    // 描述
-    const descArr = ["为您推荐的内容", "阿里云为您提供"];
- 
-    // 屏蔽来源(包含关键字则屏蔽)
-    const sourceArr = ["博客园", "CSDN博客", "CSDN技术社区", "csdn.net", "百度知道", "腾讯云计算",
-        "百度文库", "华军软件园", "当下软件园", "东坡下载站",
-        "系统之家", "软件园", "/soft/", "软件", "下载网", "寻医",
-        "健康", "健客网", "医生", "柠檬爱美", "紫一商城", "120.net", "求医", "宝宝知道", "58codes.com",
-        "itgh.cn", "frontend.devrank.cn", "codeleading.com", "nzw6.com", "悠悠之家", "pythonjishu.com",
-        "脚本之家", "jb51.net", "zhidao.baidu.com"];
- 
-    window.exec = function () {
-        const searchEngines = {
-            'baidu':{
-                tag: 'div',
-                id: 'content_left',
-                className: 'result',
-                contentTag: '.t',
-            },
-            'google': {
-                tag: 'div',
-                id: 'center_col',
-                className: 'MjjYud',
-                contentTag: '.GTRloc',
-            },
-            'bing': {
-                tag: 'li',
-                id: 'b_results',
-                className: 'b_algo',
-                contentTag: '.tptt',
-            }
-        }
-        const selectorID = {
-            'baidu':{
-                content: document.getElementById(`${searchEngines.baidu.id}`),
-            },
-            'google': {
-                content: document.getElementById(`${searchEngines.google.id}`),
-            },
-            'bing': {
-                content: document.getElementById(`${searchEngines.bing.id}`),
-            }
-        }
- 
-        const selectors = {
-            'baidu':{
-                documents: $(selectorID.baidu.content).find(`${searchEngines.baidu.tag}[class*=${searchEngines.baidu.className}]`)
-            },
-            'google': {
-                documents: $(selectorID.google.content).find(`${searchEngines.google.tag}[class*=${searchEngines.google.className}]`)
-            },
-            'bing': {
-                documents: $(selectorID.bing.content).find(`${searchEngines.bing.tag}[class*=${searchEngines.bing.className}]`)
-            }
-        }
- 
-        if (selectorID.baidu.content) {
-            for (let i = selectors.baidu.documents.length - 1; i >= 0; i--) {
-                isRemove(selectors.baidu.documents[i], searchEngines.baidu.contentTag);
-            }
-        }
-        if(selectorID.google.content) {
-            for (let i = selectors.google.documents.length - 1; i >= 0; i--) {
-                isRemove(selectors.google.documents[i], searchEngines.google.contentTag);
-            }
-        }
-        if(selectorID.bing.content) {
-            for (let i = selectors.bing.documents.length - 1; i >= 0; i--) {
-                isRemove(selectors.bing.documents[i], searchEngines.bing.contentTag);
-            }
-        }
-    };
- 
-    function isRemove(document, selector) {
-        const title = getTitle(document, selector);
-        const desc = getDesc(document);
-        const source = getSource(document);
- 
-        const removeByArray = (text, arr, type) => {
-            for (const element of arr) {
-                if (text.includes(element)) {
-                    document.remove();
-                    return;
+// ==UserScript==
+// @name        屏蔽 CSDN
+// @version     1.1.0
+// @author      aaron yan
+// @description 屏蔽 CSDN 及其它垃圾信息
+// @match       https://www.baidu.com
+// @match       https://www.baidu.com/s*
+// @match       https://www.google.com
+// @match       https://www.google.com/search*
+// @match       https://www.google.com.hk/search*
+// @match       https://www.google.com.tw/search*
+// @grant       GM_xmlhttpRequest
+
+// @license     MIT
+
+// @changelog  v1.1.0 (2024-01-17)
+//             1. 优化代码结构和性能
+//             2. 改进屏蔽规则管理
+//             3. 添加更详细的日志信息
+// ==/UserScript==
+
+
+    (function () {
+        // 配置对象
+        const CONFIG = {
+            // 搜索引擎配置
+            engines: {
+                baidu: {
+                    host: 'baidu.com',
+                    container: '#content_left',
+                    selectors: {
+                        title: ['h3.c-title.t.tts-title', '.c-gap-right'],
+                        url: '.c-showurl',
+                        result: '.result',
+                        source: 'div[class*="source"]'
+                    }
+                },
+                google: {
+                    host: 'google.com',
+                    container: '#search',
+                    selectors: {
+                        title: ['.VuuXrf'],
+                        result: '.MjjYud'
+                    }
                 }
+            },
+
+            // 屏蔽规则配置
+            blockRules: {
+                // 技术网站
+                tech: [
+                    "CSDN博客", "CSDN技术社区", "csdn.net",
+                    "简书", "博客园", "PHP中文网",
+                    "51CTO", "腾讯云计算",
+                    "360Doc", "千锋教育"
+                ],
+                // 下载站点
+                download: [
+                    "软件园", "下载之家", "下载网",
+                    "华军软件园", "当下软件园", "东坡下载站",
+                    "系统之家", "/soft/"
+                ],
+                // 医疗健康
+                health: [
+                    "百度健康", "快速问医生", "求医网",
+                    "求医问药", "家庭医生", "寻医",
+                    "健康", "健客网", "医生"
+                ],
+                // 其他
+                others: [
+                    "亿速云", "动力节点在线", "IT 技术博客",
+                    "千锋教育", "虎课网", "黑马程序员", "抖音"
+                ]
+            },
+
+            // URL屏蔽规则
+            blockUrls: [
+                'douyin.com'
+            ]
+        };
+
+        // 工具函数
+        const utils = {
+            // 防抖函数
+            debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            },
+
+            // 日志函数
+            log(type, message, data = {}) {
+                const styles = {
+                    block: 'color: #ff6b6b; font-weight: bold',
+                    info: 'color: #4CAF50; font-weight: bold',
+                    error: 'color: #f44336; font-weight: bold'
+                };
+                console.log(`%c ${message}`, styles[type]);
+            },
+
+            // 获取当前搜索引擎
+            getCurrentEngine() {
+                const host = window.location.hostname;
+                return Object.entries(CONFIG.engines).find(([, config]) =>
+                    host.includes(config.host)
+                )?.[0];
+            },
+
+            // 获取所有屏蔽关键词
+            getAllBlockedSites() {
+                return Object.values(CONFIG.blockRules)
+                    .flat()
+                    .filter((value, index, self) => self.indexOf(value) === index);
             }
         };
- 
-        if (title) {
-            for (const element of titleRegex) {
-                if (new RegExp(element).test(title)) {
-                    document.remove();
-                    return;
+
+        // 搜索结果处理类
+        class SearchResultHandler {
+            constructor(engine) {
+                this.engine = engine;
+                this.config = CONFIG.engines[engine];
+                this.blockedSites = utils.getAllBlockedSites();
+            }
+
+            // 检查是否应该屏蔽
+            shouldBlock(element) {
+                // 检查标题
+                const titleSelectors = this.config.selectors.title;
+                for (const selector of titleSelectors) {
+                    const titleElement = element.querySelector(selector);
+                    if (titleElement && this.blockedSites.some(site =>
+                        titleElement.textContent.trim().includes(site))) {
+                        return true;
+                    }
+                }
+
+                // 检查URL（如果有URL选择器）
+                if (this.config.selectors.url) {
+                    const urlElement = element.querySelector(this.config.selectors.url);
+                    if (urlElement && CONFIG.blockUrls.some(url =>
+                        urlElement.textContent.trim().includes(url))) {
+                        return true;
+                    }
+                }
+
+                // 检查来源（如果有source选择器）
+                if (this.config.selectors.source) {
+                    const sourceElement = element.querySelector(this.config.selectors.source);
+                    if (sourceElement && this.blockedSites.some(site =>
+                        sourceElement.textContent.trim().includes(site))) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            // 移除搜索结果
+            removeBlockedSites() {
+                try {
+                    const results = document.querySelectorAll(this.config.selectors.result);
+                    results.forEach(result => {
+                        if (this.shouldBlock(result)) {
+                            const title = result.querySelector(this.config.selectors.title[0])?.textContent.trim();
+                            const source = result.querySelector(this.config.selectors.source)?.textContent.trim();
+                            utils.log('block', 'Blocked:', {
+                                title,
+                                source: source || 'N/A'
+                            });
+                            result.remove();
+                        }
+                    });
+                } catch (error) {
+                    utils.log('error', `[${this.engine}] Error:`, error);
                 }
             }
-            removeByArray(title, titleArr, 'title');
         }
- 
-        if (desc) {
-            removeByArray(desc, descArr, 'desc');
-        }
- 
-        if (source) {
-            removeByArray(source, sourceArr, 'source');
-        }
-    }
- 
-    /**
-     * 获取文章信息
-     * @param {string} element
-     * @param {string} selector
-     * @returns {string}
-     */
-    function getArticleInfo(element, selector) {
-        try {
-            const selectedElement = element.querySelector(selector);
-            return selectedElement ? selectedElement.innerText : "";
-        } catch (error) {
-            handleError(`get ${element} or ${selector} error`, error);
-        }
-        return "";
-    }
- 
-    /**
-     * 获取文章标题
-     * @param {string} element
-     * @param {string} selector
-     * @returns {string}
-     */
-    function getTitle(element, selector) {
-        return getArticleInfo(element, selector);
-    }
- 
-    /**
-     * 获取文章描述
-     * @param {*} element
-     * @returns {string}
-     */
-    function getDesc(element) {
-        return getArticleInfo(element, 'span[class*="content"]');
-    }
- 
-    /**
-     * 获取文章来源
-     * @param {*} element
-     * @returns {string}
-     */
-    function getSource(element) {
-        return getArticleInfo(element, 'div[class*="source"]');
-    }
- 
-    /**
-     * 通用错误处理函数
-     * @param {string} message
-     * @param {Error} error
-     */
-    function handleError(message, error) {
-        console.error(`${message}`, error);
-    }
- 
-    /**
-     * 屏蔽内容
-     */
-    function hiddenContent() {
-        let timer;
- 
-        document.body.addEventListener("DOMNodeInserted", (e) => {
-            if (timer) {
-                window.clearTimeout(timer);
+
+        // 观察器类
+        class ResultObserver {
+            constructor() {
+                this.engine = utils.getCurrentEngine();
+                if (!this.engine) return;
+
+                this.handler = new SearchResultHandler(this.engine);
+                this.container = document.querySelector(CONFIG.engines[this.engine].container);
             }
-            timer = window.setTimeout(() => {
-                exec();
-            }, 100);
-        });
-    }
- 
-    $(function () {
-        hiddenContent();
-    });
- 
-})();
+
+            // 初始化观察器
+            init() {
+                if (!this.container) return;
+
+                // 创建MutationObserver
+                const observer = new MutationObserver(
+                    utils.debounce(() => this.handler.removeBlockedSites(), 100)
+                );
+
+                // 配置观察器
+                observer.observe(this.container, {
+                    childList: true,
+                    subtree: true
+                });
+
+                // 监听滚动事件
+                window.addEventListener('scroll',
+                    utils.debounce(() => this.handler.removeBlockedSites(), 100),
+                    { passive: true }
+                );
+
+                // 初始执行
+                this.handler.removeBlockedSites();
+            }
+        }
+
+        // 初始化
+        function init() {
+            utils.log('info', '⚡ Content Blocker Activated! ⚡');
+            const observer = new ResultObserver();
+            observer.init();
+        }
+
+        // 启动脚本
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
